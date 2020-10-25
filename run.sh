@@ -1,4 +1,4 @@
-FABRIC_DIR=$HOME/sem7/blockchain/asmt3/hyper-ledger-fabric/fabric-samples
+FABRIC_DIR=$HOME/Desktop/sem7/blockchain/asmt3/hyper-ledger-fabric/fabric-samples
 CHANNEL=channel1
 echo $FABRIC_DIR
 export PATH=$FABRIC_DIR/bin:$PATH
@@ -105,15 +105,53 @@ peer lifecycle chaincode approveformyorg -o $ORDERER_PEER_ADDRESS --ordererTLSHo
 done
 cd $FABRIC_DIR/test-network/
 
-peer lifecycle chaincode checkcommitreadiness --channelID $CHANNEL --name $LABEL_NO_VERSION --version 1.0 --sequence 1 --tls --cafile $ORDERER_TLS_ROOT_CERT --output json
-#enough to do from one org
-peer lifecycle chaincode commit -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --channelID $CHANNEL --name $LABEL_NO_VERSION --version 1.0 --sequence 1 --tls --cafile ${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem --peerAddresses localhost:7051 --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt --peerAddresses localhost:9051 --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
+peer lifecycle chaincode checkcommitreadiness --channelID $CHANNEL --name $LABEL_NO_VERSION \
+--version 1.0 --sequence 1 --tls --cafile $ORDERER_TLS_ROOT_CERT --output json
+# commit chaincode
+echo "Commit chaincode"
 
-# peer lifecycle chaincode commit -o $ORDERER_PEER_ADDRESS --ordererTLSHostnameOverride orderer.example.com --channelID $CHANNEL --name $LABEL_NO_VERSION --version 1.0 --sequence 1 --tls --cafile $ORDERER_TLS_ROOT_CERT --peerAddresses ${org_peer_address[0]} --tlsRootCertFiles ${org_tls_root_cert[0]}
-peer lifecycle chaincode querycommitted --channelID $CHANNEL --name $LABEL_NO_VERSION --cafile $ORDERER_TLS_ROOT_CERT
+peer lifecycle chaincode commit -o $ORDERER_PEER_ADDRESS --ordererTLSHostnameOverride orderer.example.com \
+--channelID $CHANNEL --name $LABEL_NO_VERSION --version 1.0 --sequence 1 --tls --cafile \
+$ORDERER_TLS_ROOT_CERT \
+--peerAddresses ${org_peer_address[0]} \
+--tlsRootCertFiles ${org_tls_root_cert[0]} \
+--peerAddresses ${org_peer_address[1]} \
+--tlsRootCertFiles ${org_tls_root_cert[1]} \
+--peerAddresses ${org_peer_address[2]} \
+--tlsRootCertFiles ${org_tls_root_cert[2]} 
+-
+echo "check commit readiness"
+for ((i=0; i<${#org_msps[@]}; i++))
+do
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_LOCALMSPID=${org_msps[i]}
+export CORE_PEER_TLS_ROOTCERT_FILE=${org_tls_root_cert[i]}
+export CORE_PEER_MSPCONFIGPATH=${org_msp_config_path[i]}
+export CORE_PEER_ADDRESS=${org_peer_address[i]}
+echo $CORE_PEER_LOCALMSPID
+#query committed on all orgs
+peer lifecycle chaincode querycommitted --channelID $CHANNEL --name $LABEL_NO_VERSION \
+--cafile $ORDERER_TLS_ROOT_CERT
+done
+
+echo "call invoke"
+echo $CORE_PEER_TLS_ENABLED
+echo $CORE_PEER_LOCALMSPID
+echo $CORE_PEER_TLS_ROOTCERT_FILE
+echo $CORE_PEER_MSPCONFIGPATH
+echo $CORE_PEER_ADDRESS
+
 
 peer chaincode invoke -o $ORDERER_PEER_ADDRESS --ordererTLSHostnameOverride orderer.example.com --tls --cafile \
 $ORDERER_TLS_ROOT_CERT -C $CHANNEL -n $LABEL_NO_VERSION --peerAddresses ${org_peer_address[0]} \
---tlsRootCertFiles ${org_tls_root_cert[0]} -c '{"function":"InitLedger","Args":[]}'
+--tlsRootCertFiles ${org_tls_root_cert[0]} \
+--peerAddresses ${org_peer_address[1]} \
+--tlsRootCertFiles ${org_tls_root_cert[1]} \
+--peerAddresses ${org_peer_address[2]} \
+--tlsRootCertFiles ${org_tls_root_cert[2]} \
+-c '{"function":"InitLedger","Args":[]}'
 
+sleep 3
 peer chaincode query -C $CHANNEL -n $LABEL_NO_VERSION -c '{"Args":["GetAllAssets"]}'
+
+
