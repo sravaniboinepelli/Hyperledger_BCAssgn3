@@ -1,11 +1,12 @@
-FABRIC_DIR=$HOME/Desktop/sem7/blockchain/asmt3/hyper-ledger-fabric/fabric-samples
+#!/bin/bash
+FABRIC_DIR=$HOME/sem7/blockchain/asmt3/hyper-ledger-fabric/fabric-samples
 CHANNEL=channel1
 echo $FABRIC_DIR
 export PATH=$FABRIC_DIR/bin:$PATH
-CHAINCODE_JAVASCRIPT_DIR=$FABRIC_DIR/asset-transfer-basic/chaincode-javascript
-PACKAGE_NAME=basic.tar.gz
-LABEL_NAME=basic_1.0
-LABEL_NO_VERSION=basic
+CHAINCODE_JAVASCRIPT_DIR=$FABRIC_DIR/asmt3-eng-auction/chaincode-javascript
+PACKAGE_NAME=engauction.tar.gz
+LABEL_NAME=engauction_1.0
+LABEL_NO_VERSION=engauction
 CHAINCODE_LANG=node
 cd $FABRIC_DIR/test-network/
 
@@ -134,7 +135,7 @@ peer lifecycle chaincode querycommitted --channelID $CHANNEL --name $LABEL_NO_VE
 --cafile $ORDERER_TLS_ROOT_CERT
 done
 
-echo "call invoke"
+echo "call invoke to InitLedger"
 echo $CORE_PEER_TLS_ENABLED
 echo $CORE_PEER_LOCALMSPID
 echo $CORE_PEER_TLS_ROOTCERT_FILE
@@ -151,7 +152,66 @@ $ORDERER_TLS_ROOT_CERT -C $CHANNEL -n $LABEL_NO_VERSION --peerAddresses ${org_pe
 --tlsRootCertFiles ${org_tls_root_cert[2]} \
 -c '{"function":"InitLedger","Args":[]}'
 
+# as invoke involves transactions to create block and update ledger which involves endoring by all
+# peers(default policy) amd by orderer takes time for ledger to update. wait befor issuing query
 sleep 3
+
 peer chaincode query -C $CHANNEL -n $LABEL_NO_VERSION -c '{"Args":["GetAllAssets"]}'
+
+
+echo "submit bid by each org"
+for ((i=0; i<${#org_msps[@]}; i++))
+do
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_LOCALMSPID=${org_msps[i]}
+export CORE_PEER_TLS_ROOTCERT_FILE=${org_tls_root_cert[i]}
+export CORE_PEER_MSPCONFIGPATH=${org_msp_config_path[i]}
+export CORE_PEER_ADDRESS=${org_peer_address[i]}
+echo $CORE_PEER_LOCALMSPID
+if [ $i -eq 0 ]
+then
+peer chaincode invoke -o $ORDERER_PEER_ADDRESS --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_TLS_ROOT_CERT \
+-C $CHANNEL -n $LABEL_NO_VERSION --peerAddresses ${org_peer_address[0]} \
+--tlsRootCertFiles ${org_tls_root_cert[0]} \
+--peerAddresses ${org_peer_address[1]} \
+--tlsRootCertFiles ${org_tls_root_cert[1]} \
+--peerAddresses ${org_peer_address[2]} \
+--tlsRootCertFiles ${org_tls_root_cert[2]} \
+-c '{"function":"SubmitBid","Args":["310", "asset1"]}'
+elif [ $i -eq 1 ]
+then
+peer chaincode invoke -o $ORDERER_PEER_ADDRESS --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_TLS_ROOT_CERT \
+-C $CHANNEL -n $LABEL_NO_VERSION --peerAddresses ${org_peer_address[0]} \
+--tlsRootCertFiles ${org_tls_root_cert[0]} \
+--peerAddresses ${org_peer_address[1]} \
+--tlsRootCertFiles ${org_tls_root_cert[1]} \
+--peerAddresses ${org_peer_address[2]} \
+--tlsRootCertFiles ${org_tls_root_cert[2]} \
+-c '{"function":"SubmitBid","Args":["350", "asset1"]}'
+else
+peer chaincode invoke -o $ORDERER_PEER_ADDRESS --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_TLS_ROOT_CERT \
+-C $CHANNEL -n $LABEL_NO_VERSION --peerAddresses ${org_peer_address[0]} \
+--tlsRootCertFiles ${org_tls_root_cert[0]} \
+--peerAddresses ${org_peer_address[1]} \
+--tlsRootCertFiles ${org_tls_root_cert[1]} \
+--peerAddresses ${org_peer_address[2]} \
+--tlsRootCertFiles ${org_tls_root_cert[2]} \
+-c '{"function":"SubmitBid","Args":["400", "asset1"]}'
+fi
+ 
+sleep 5
+done
+# -c '{"function":"SubmitBid","Args":[]}'
+# peer chaincode invoke -o $ORDERER_PEER_ADDRESS --ordererTLSHostnameOverride orderer.example.com --tls --cafile \
+# $ORDERER_TLS_ROOT_CERT -C $CHANNEL -n $LABEL_NO_VERSION --peerAddresses ${org_peer_address[0]} \
+# --tlsRootCertFiles ${org_tls_root_cert[0]} \
+# --peerAddresses ${org_peer_address[1]} \
+# --tlsRootCertFiles ${org_tls_root_cert[1]} \
+# --peerAddresses ${org_peer_address[2]} \
+# --tlsRootCertFiles ${org_tls_root_cert[2]} \
+# -c '{"function":"SubmitBid","Args":["400", "asset1"]}'
+echo "call declareWinner"
+
+peer chaincode query -C $CHANNEL -n $LABEL_NO_VERSION -c '{"Args":["DeclareWinner"]}'
 
 
